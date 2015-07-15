@@ -10,6 +10,8 @@ and that it is [working with your Brightbox Account credentials](https://www.bri
 Up](https://manage.brightbox.com/signup) is easy and you get trial credit
 to get you started.
 
+In particular make sure you have an [ssh key configured](https://www.brightbox.com/docs/guides/manager/ssh-keys/) and can log into servers with it. 
+
 ## Usage
 
 There are two scripts that can be used to generate a Flynn cluster: `build-cluster` and `build-image`.
