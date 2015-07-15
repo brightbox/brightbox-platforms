@@ -1,0 +1,201 @@
+#!/bin/bash
+
+set -e
+
+source $(dirname $0)/build-common
+
+# Default settings
+SSH="ssh -q -oStrictHostKeyChecking=no"
+OPTIND=1
+cluster_number=1
+cluster_size=3
+server_type=4gb.ssd
+
+usage() {
+  echo "Usage: $(basename $0) [-g server group] [-t server_type] [-i cluster_size] [-n cluster_number] [image_id]" >&2
+  exit 2
+}
+
+group_servers() {
+  local group_id=$1
+
+  brightbox -s group show ${group_id} 2>/dev/null | sed -n '/^servers./s///p'
+}
+
+free_cloud_ip() {
+  local cloud_ip=""
+  cloud_ip=$(brightbox -s cloudip 2>/dev/null | grep -m 1 unmapped | cut -f1)
+  if [[ "${cloud_ip}" ]]; then
+    echo "${cloud_ip}"
+  else
+    brightbox -s cloudip create 2>/dev/null | cut -f1
+  fi
+}
+
+cluster_domain() {
+  local cloud_ip=$1
+
+  brightbox -s cloudip ${cloud_ip} 2>/dev/null | cut -f5 | sed "s/^[^\.\]*/${cloud_ip}/"
+
+}
+
+wait_for_ssh() {
+  local ssh_target=$1
+  local test_file=/var/lib/cloud/instance/boot-finished
+
+  ssh-keygen -R ${cluster_domain}
+  ssh-keygen -R $(getent hosts ${cluster_domain} | awk '{print $1; exit}')
+  echo -n "Waiting for ssh at ${ssh_target}"
+  while ! ${SSH} ubuntu@"${ssh_target}" test -e "${test_file}"; do
+    echo -n "."
+    sleep 5
+  done
+  echo
+}
+
+while getopts "hi:n:t:g:" opt; do
+  case "$opt" in
+    h)
+      usage
+      ;;
+    g)
+      grp_id=$OPTARG
+      ;;
+    i)
+      cluster_size=$OPTARG
+      ;;
+    n)
+      cluster_number=$OPTARG
+      ;;
+    t)
+      server_type=$OPTARG
+      ;;
+  esac
+done
+
+shift $((OPTIND-1))
+
+[[ "$1" = "--" ]] && shift
+
+
+[[ $# -gt 1 ]] && usage
+
+image_id="$1"
+
+if [[ "${image_id}" ]]; then 
+  echo "Building Flynn cluster from image ${image_id}"
+  script=""
+else
+  image_id="$(trusty_image)"
+  script="$(userscript)"
+  if [ -z "${image_id}" ]; then
+    echo "Failed to locate trusty base image" >&2
+    exit 1
+  fi
+  echo "Building Flynn cluster from trusty base image ${image_id}"
+fi
+
+cluster_name="Flynn Cluster #${cluster_number}"
+
+if [ -z "${grp_id}" ]; then
+  # Create a firewall group
+  grp_id=$(brightbox -s group create -n "${cluster_name}" 2>/dev/null | grep -o '^grp-.....')
+  fwp_id=$(brightbox -s firewall-policies create -n "${cluster_name}" ${grp_id} 2>/dev/null | grep -o '^fwp-.....')
+  brightbox firewall-rules create -d any --description="Outbound access for ${cluster_name}" ${fwp_id}
+  brightbox firewall-rules create -p tcp -s any --dport="22,80,443,2222,3000-3500" --description="Inbound TCP access for ${cluster_name}" ${fwp_id}
+  brightbox firewall-rules create -p icmp -s any -i any --description="Inbound ICMP access for ${cluster_name}" ${fwp_id}
+  brightbox firewall-rules create -s ${grp_id} --description="Inbound access within ${cluster_name}" ${fwp_id}
+fi
+
+echo "${cluster_name} security group id is ${grp_id}"
+
+echo "Building ${cluster_name} layer 0"
+
+build_servers "${image_id}" "${script}" "${grp_id}" "${cluster_size}"
+
+
+
+# Get the cluster server list from the cluster group details
+server_list=( $(group_servers ${grp_id}) )
+if [[ -z "${server_list}" ]]; then
+  echo "Failed to obtain list of servers in ${grp_id}" >&2
+  exit 2
+fi
+
+# Restart servers is building from scratch
+if [[ "${script}" ]]; then
+  for ((i=0; i<${#server_list[*]}; i++)); do
+    wait_for "${server_list[i]}" inactive
+  done
+  brightbox server start ${server_list[*]}
+fi
+
+# Get a free cloud ip
+cloudip_id=$(free_cloud_ip)
+if [[ -z "${cloudip_id}" ]]; then
+  echo "Failed to allocate unmapped cloud ip" >&2
+  exit 2
+fi
+
+# Create a load balancer to front end the cluster
+load_balancer=$(brightbox -s lbs create \
+  --listeners=22:22:tcp:50000,2222:2222:tcp:50000,80:80:tcp:50000,443:443:tcp:50000 \
+  --hc-port=22 \
+  --name="${cluster_name}" \
+  ${server_list[*]}| cut -f1)
+if [[ -z "${load_balancer}" ]]; then
+  echo "Failed to create load balancer" >&2
+  exit 2
+fi
+
+# Wait for servers to finish starting up
+for ((i=0; i<${#server_list[*]}; i++)); do
+  wait_for "${server_list[i]}" active
+done
+
+# Map the cloudip to the first server in the cluster and wait for ssh
+# to activate
+brightbox cloudip map -u "${cloudip_id}" "${server_list}"
+cluster_domain=$(cluster_domain ${cloudip_id})
+wait_for_ssh "${cluster_domain}"
+
+echo "Obtaining discovery token for Cluster ${cluster_domain}"
+
+discovery_token=$(${SSH} ubuntu@"${cluster_domain}" sudo flynn-host init --init-discovery)
+
+echo "Allocating discovery token ${discovery_token} to other cluster members..."
+
+for ((i=1; i<${#server_list[*]}; i++)); do
+  echo -n "${server_list[i]} "
+  ${SSH} ubuntu@"${cluster_domain}" ${SSH} ${server_list[i]} sudo flynn-host init --discovery "${discovery_token}"
+done
+
+echo "Starting Flynn daemon"
+for ((i=0; i<${#server_list[*]}; i++)); do
+  echo -n "${server_list[i]} "
+  ${SSH} ubuntu@"${cluster_domain}" ${SSH} ${server_list[i]} sudo start flynn-host
+done
+echo
+
+echo "Unmapping cloud ip"
+brightbox cloudip unmap ${cloudip_id}
+
+echo -n "Waiting for load balancer ${load_balancer} to complete"
+status=$(brightbox -s lbs list ${load_balancer} 2>/dev/null | cut -f2)
+while [ "${status}" != 'active' ]
+do
+  echo -n "."
+  sleep 5
+  status=$(brightbox -s lbs list ${load_balancer} 2>/dev/null | cut -f2)
+done
+echo
+
+echo "Remapping cloud ip to group"
+brightbox cloudip map ${cloudip_id} ${load_balancer}
+
+wait_for_ssh ${cluster_domain}
+
+echo "Bootstrapping Flynn Layer 1"
+${SSH} ubuntu@"${cluster_domain}" sudo CLUSTER_DOMAIN=${cluster_domain} \
+  flynn-host bootstrap --min-hosts 3 \
+  --discovery "${discovery_token}"

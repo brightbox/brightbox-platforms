@@ -1,0 +1,91 @@
+#!/bin/bash
+
+# Build a Flynn Image on Brightbox Cloud
+
+source $(dirname $0)/build-common
+
+# The smallest server type Flynn will build in - to reduce the size of
+# the image
+server_type='512mb.ssd'
+
+clean_up_server() {
+  echo "Cleaning up server"
+  if [ "${server}" ]
+  then
+    brightbox servers destroy ${server}
+    unset server
+  fi
+}
+
+clean_up_image() {
+  echo "Cleaning up image"
+  if [ "${image}" ]
+  then
+   brightbox images destroy ${image}
+   unset image
+  fi
+}
+
+# Remove build server and image if there is a fault or the script is stopped.
+clean_up_and_die() {
+  clean_up_server
+  clean_up_image
+  exit 2
+}
+
+trap clean_up_and_die 1 2 3 15
+
+# Get the latest official Ubuntu Trusy X86_64 image id
+trusty_image() {
+  brightbox -s images list -t official 2>/dev/null | awk '/ubuntu-trusty-14\.04-amd64-server[^-]/ {print $1}'
+}
+
+if [ "$#" -ne 0 ]
+then
+  echo "Usage: $(basename $0)" >&2
+  exit 1
+fi
+
+base_image="$(trusty_image)"
+
+if [ -z "${base_image}" ]
+then
+  echo "Failed to locate trusty base image" >&2
+  exit 1
+fi
+
+echo "Creating Flynn image from trusty base image ${base_image}"
+
+server="$(build_server ${base_image})"
+
+if [ -z "${server}" ]
+then
+  echo "Failed to create build server" >&2
+  exit 1
+fi
+
+wait_for "${server}" inactive
+
+echo "Flynn image build complete - snapshotting"
+brightbox servers snapshot "${server}"
+
+image=$(brightbox -s images list -t snapshot | grep "Snapshot of ${server}" | cut -f1)
+
+echo "Snapshot image is ${image}"
+echo -n "Waiting for snapshot to complete"
+status=$(brightbox -s images list ${image} 2>/dev/null | cut -f5)
+while [ "${status}" != 'private' ]
+do
+  echo -n "."
+  sleep 5
+  status=$(brightbox -s images list ${image} 2>/dev/null | cut -f5)
+done
+
+echo
+echo "${image} snapshot complete"
+echo "Setting snapshot details"
+brightbox images update -n "Flynn Cluster base image" -u ubuntu "${image}"
+
+echo "Cleaning up"
+clean_up_server
+exit 0
