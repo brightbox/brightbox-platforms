@@ -12,12 +12,12 @@ to get you started.
 
 ## Usage
 
-There are two scripts that can be used to generate a Flynn cluster: `build-cluster` and `build-image.
+There are two scripts that can be used to generate a Flynn cluster: `build-cluster` and `build-image`.
 
 * `build-cluster` on its own will build a three server Flynn
 cluster from scratch, or it can be tailored to select the
-[groups](https://www.brightbox.com/docs/guides/cli/server-groups/),
-[images](https://www.brightbox.com/docs/reference/server-images/) and
+[group](https://www.brightbox.com/docs/guides/cli/server-groups/),
+[image](https://www.brightbox.com/docs/reference/server-images/) and
 [server type](https://www.brightbox.com/docs/reference/server-types/)
 * `build-image` creates a [server
 snapshot](https://www.brightbox.com/docs/guides/cli/create-a-snapshot/)
