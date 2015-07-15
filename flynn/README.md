@@ -2,11 +2,11 @@
 
 [Flynn](http://flynn.io) is a platform for running 'apps, databases,
 websites and services at scale'. The instructions and scripts in this
-directory allow you to start a Flynn cluster on the Brightbox cloud.
+directory allow you to start a Flynn cluster on the [Brightbox Cloud](https://www.brightbox.com)
 
 First make sure you have the [Brightbox CLI
 installed](https://www.brightbox.com/docs/guides/cli/installation/)
-and that it is working with your Brightbox Account credentials. [Signing
+and that it is [working with your Brightbox Account credentials](https://www.brightbox.com/docs/guides/cli/getting-started/). [Signing
 Up](https://manage.brightbox.com/signup) is easy and you get trial credit
 to get you started.
 
@@ -25,8 +25,10 @@ with the Flynn software installed for faster Flynn cluster builds.
 
 ## Build a Flynn Image
 
+Building a cluster from scratch can take a long time, so if you are using Flynn regularly it is a good idea to create an image so that clusters build much more quickly. 
+
 Simply run `build-image` from the command prompt and it will create a
-Flynn image for you automatically and register it in the [Image Library](https://www.brightbox.com/docs/guides/cli/image-library/) Make a note of the image id (in the format img-xxxxx) and specify it as an argument to `build-cluster`.
+Flynn image for you automatically and register it in the [Image Library](https://www.brightbox.com/docs/guides/cli/image-library/). Make a note of the image id (in the format img-xxxxx) and specify it as an argument to `build-cluster`.
 
 ## Build a Flynn Cluster
 
@@ -44,9 +46,9 @@ from the list obtained by running `brightbox types`. The default is a
 * `cluster size` - The number of servers you want in the cluster. Defaults
 to 3 which is also the minimum size.
 * `cluster number` - The identifier for this Flynn Cluster. All brightbox
-objects associated with the cluster are named with this identifier
+objects associated with the cluster are named with this identifier. The default is '1'. 
 * `image id` - The image id of the Flynn image built previously with
-`build-image`
+`build-image`. If you omit this argument `build-cluster` will build the cluster from scratch. 
 
 Run `build-cluster` with your chosen options and follow the onscreen
 instructions.
