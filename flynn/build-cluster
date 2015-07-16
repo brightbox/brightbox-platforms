@@ -85,6 +85,10 @@ image_id="$1"
 if [[ "${image_id}" ]]; then 
   echo "Building Flynn cluster from image ${image_id}"
   script=""
+  if [[ -z "$(brightbox images list -t snapshot ${image_id} 2>/dev/null)" ]]; then
+    echo "Can't locate snapshot image ${image_id} - aborting" >&2
+    exit 2
+  fi
 else
   image_id="$(trusty_image)"
   script="$(userscript)"
