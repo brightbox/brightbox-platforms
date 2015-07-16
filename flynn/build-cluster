@@ -195,7 +195,8 @@ done
 echo
 
 echo "Remapping cloud ip to group"
-brightbox cloudip map ${cloudip_id} ${load_balancer}
+brightbox cloudip map "${cloudip_id}" "${load_balancer}"
+brightbox cloudup update -n "${cluster_name}" "${cloudip_id}"
 
 wait_for_ssh ${cluster_domain}
 
