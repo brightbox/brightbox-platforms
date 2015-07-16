@@ -61,4 +61,17 @@ Once the cluster is working you can refer to the [Using
 Flynn](https://flynn.io/docs) section of the Flynn website to install
 your applications and services onto the cluster.
 
+## Cleaning up the Flynn Cluster
+
+The 'cleanup-cluster' script can remove the entire Flynn cluster and associated loadbalancers, groups, cloudips and images all in one go.
+
+```
+cleanup-cluster [-igc] cluster_domain/cip_id
+```
+
+* `cluster_domain/cip_id`: The domain or cloud ip id of the cluster to destroy: e.g: `cip-vsalc.gb1.brightbox.com` or just `cip-vsalc`.
+* -i option removes the Flynn image the cluster was built with.
+* -g option removes the Flynn group the cluster is in. 
+* -c option removes the cloud ip completely rather than just unmapping it. 
+
 
