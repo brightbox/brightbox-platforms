@@ -9,18 +9,21 @@ OPTIND=1
 cluster_number=1
 cluster_size=3
 server_type=4gb.ssd
+cluster_name="Flynn Cluster #${cluster_number}"
 
 usage() {
   echo "Usage: $(basename $0) [-g server group] [-t server_type] [-i cluster_size] [-n cluster_number] [image_id]" >&2
   exit 2
 }
 
+# Obtain the list of servers in a group
 group_servers() {
   local group_id=$1
 
-  brightbox -s group show ${group_id} 2>/dev/null | sed -n '/^servers./s///p'
+  brightbox -s group show ${group_id} 2>/dev/null | sed -n '/^servers\t/s///p'
 }
 
+# Find a free unmapped cloudip - creating one if necessary
 free_cloud_ip() {
   local cloud_ip=""
   cloud_ip=$(brightbox -s cloudip 2>/dev/null | grep -m 1 unmapped | cut -f1)
@@ -31,13 +34,14 @@ free_cloud_ip() {
   fi
 }
 
+# Get the FQDN of the cloud IP.
 cluster_domain() {
   local cloud_ip=$1
 
-  brightbox -s cloudip ${cloud_ip} 2>/dev/null | cut -f5 | sed "s/^[^\.\]*/${cloud_ip}/"
-
+  brightbox -s cloudip show "${cloud_ip}" 2>/dev/null| sed -n '/^fqdn\t/s///p'
 }
 
+# Wait until ssh is available *and* cloud-init has finished bootstrapping
 wait_for_ssh() {
   local ssh_target=$1
   local test_file=/var/lib/cloud/instance/boot-finished
@@ -83,6 +87,7 @@ source $(dirname $0)/build-common
 
 image_id="$1"
 
+# Locate the Trusty base image if no pre-built Flynn image is supplied
 if [[ "${image_id}" ]]; then 
   echo "Building Flynn cluster from image ${image_id}"
   script=""
@@ -100,7 +105,6 @@ else
   echo "Building Flynn cluster from trusty base image ${image_id}"
 fi
 
-cluster_name="Flynn Cluster #${cluster_number}"
 
 if [ -z "${grp_id}" ]; then
   # Create a firewall group
@@ -115,10 +119,7 @@ fi
 echo "${cluster_name} security group id is ${grp_id}"
 
 echo "Building ${cluster_name} layer 0"
-
 build_servers "${image_id}" "${script}" "${grp_id}" "${cluster_size}"
-
-
 
 # Get the cluster server list from the cluster group details
 server_list=( $(group_servers ${grp_id}) )
