@@ -46,7 +46,8 @@ already run the command before. Find it out by running `brightbox groups`
 from the list obtained by running `brightbox types`. The default is a
 `4gb.ssd` machine.
 * `cluster size` - The number of servers you want in the cluster. Defaults
-to 3 which is also the minimum size.
+to 3 which is the minium size for a multi-server cluster. You can specify
+1 to get a single server cluster.
 * `cluster number` - The identifier for this Flynn Cluster. All brightbox
 objects associated with the cluster are named with this identifier. The default is '1'. 
 * `image id` - The image id of the Flynn image built previously with

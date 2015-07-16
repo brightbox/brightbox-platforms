@@ -38,15 +38,17 @@ if [[ -z "${cloudip_id}" ]]; then
 fi
 
 echo "Cleaning up load balancer and servers"
-lba_details=$(brightbox -s lbs 2>/dev/null | grep -F ${cloudip_id})
-lba_id=$(echo ${lba_details} | cut -f1 -d ' ')
-if [ -z "${lba_id}" ]; then
-  echo "CIP is not mapped to a load balancer - aborting" >&2
-  exit 2
-fi
-server_list=( $(echo ${lba_details} | cut -f5 -d ' ' | sed 's/,/ /g') )
-
-object_list=( ${lba_id} "${server_list[@]}" )
+map_id=$(brightbox -s cloudip ${cloudip_id} 2>/dev/null | cut -f4)
+case "${map_id}" in
+  lba-*)
+    server_list=( $(brightbox -s lbs ${map_id} 2>/dev/null | cut -f5 | sed 's/,/ /g') )
+    object_list=( ${map_id} "${server_list[@]}" )
+    ;;
+  srv-*)
+    server_list=( ${map_id} )
+    object_list=( ${map_id} )
+    ;;
+esac
 
 if [[ "${group_cleanup}" ]]; then
   echo "Group option chosen. Cleaning up groups"
@@ -71,7 +73,6 @@ fi
   
 echo "Cloud IP is ${cloudip_id}"
 for ((i=0; i<${#object_list[*]}; i++)); do
-
   case "${object_list[i]}" in
     lba*)
       sub_command=lbs

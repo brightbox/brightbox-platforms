@@ -10,7 +10,6 @@ cluster_number=1
 cluster_size=3
 min_hosts=3
 server_type=4gb.ssd
-cluster_name="Flynn Cluster #${cluster_number}"
 
 usage() {
   echo "Usage: $(basename $0) [-g server group] [-t server_type] [-i cluster_size] [-n cluster_number] [image_id]" >&2
@@ -68,6 +67,8 @@ while getopts "hi:n:t:g:" opt; do
     i)
       cluster_size=$OPTARG
       if [[ "${cluster_size}" -lt 3 ]]; then
+	echo "Cluster size must be a minimum of three for a multi-server cluster."
+	echo "Building a single server cluster"
         cluster_size=1
 	min_hosts="${cluster_size}"
       fi
@@ -91,6 +92,7 @@ shift $((OPTIND-1))
 source $(dirname $0)/build-common
 
 image_id="$1"
+cluster_name="Flynn Cluster #${cluster_number}"
 
 # Locate the Trusty base image if no pre-built Flynn image is supplied
 if [[ "${image_id}" ]]; then 
@@ -115,10 +117,10 @@ if [ -z "${grp_id}" ]; then
   # Create a firewall group
   grp_id=$(brightbox -s group create -n "${cluster_name}" 2>/dev/null | grep -o '^grp-.....')
   fwp_id=$(brightbox -s firewall-policies create -n "${cluster_name}" ${grp_id} 2>/dev/null | grep -o '^fwp-.....')
-  brightbox firewall-rules create -d any --description="Outbound access for ${cluster_name}" ${fwp_id}
-  brightbox firewall-rules create -p tcp -s any --dport="22,80,443,2222,3000-3500" --description="Inbound TCP access for ${cluster_name}" ${fwp_id}
-  brightbox firewall-rules create -p icmp -s any -i any --description="Inbound ICMP access for ${cluster_name}" ${fwp_id}
-  brightbox firewall-rules create -s ${grp_id} --description="Inbound access within ${cluster_name}" ${fwp_id}
+  brightbox firewall-rules create -d any --description="Outbound access for ${cluster_name}" ${fwp_id} > /dev/null
+  brightbox firewall-rules create -p tcp -s any --dport="22,80,443,2222,3000-3500" --description="Inbound TCP access for ${cluster_name}" ${fwp_id} > /dev/null
+  brightbox firewall-rules create -p icmp -s any -i any --description="Inbound ICMP access for ${cluster_name}" ${fwp_id} > /dev/null
+  brightbox firewall-rules create -s ${grp_id} --description="Inbound access within ${cluster_name}" ${fwp_id} > /dev/null
 fi
 
 echo "${cluster_name} security group id is ${grp_id}"
@@ -148,15 +150,17 @@ if [[ -z "${cloudip_id}" ]]; then
   exit 2
 fi
 
-# Create a load balancer to front end the cluster
-load_balancer=$(brightbox -s lbs create \
-  --listeners=22:22:tcp:50000,2222:2222:tcp:50000,80:80:tcp:50000,443:443:tcp:50000 \
-  --hc-port=22 \
-  --name="${cluster_name}" \
-  ${server_list[*]}| cut -f1)
-if [[ -z "${load_balancer}" ]]; then
-  echo "Failed to create load balancer" >&2
-  exit 2
+if [[ "${cluster_size}" -gt 1 ]]; then
+  # Create a load balancer to front end the cluster
+  load_balancer=$(brightbox -s lbs create \
+    --listeners=22:22:tcp:50000,2222:2222:tcp:50000,80:80:tcp:50000,443:443:tcp:50000 \
+    --hc-port=22 \
+    --name="${cluster_name}" \
+    ${server_list[*]}| cut -f1)
+  if [[ -z "${load_balancer}" ]]; then
+    echo "Failed to create load balancer" >&2
+    exit 2
+  fi
 fi
 
 # Wait for servers to finish starting up
@@ -188,21 +192,24 @@ for ((i=0; i<${#server_list[*]}; i++)); do
 done
 echo
 
-echo "Unmapping cloud ip"
-brightbox cloudip unmap ${cloudip_id}
+if [[ "${cluster_size}" -gt 1 ]]; then
+  echo "Unmapping cloud ip"
+  brightbox cloudip unmap ${cloudip_id}
 
-echo -n "Waiting for load balancer ${load_balancer} to complete"
-status=$(brightbox -s lbs list ${load_balancer} 2>/dev/null | cut -f2)
-while [ "${status}" != 'active' ]
-do
-  echo -n "."
-  sleep 5
+  echo -n "Waiting for load balancer ${load_balancer} to complete"
   status=$(brightbox -s lbs list ${load_balancer} 2>/dev/null | cut -f2)
-done
-echo
+  while [ "${status}" != 'active' ]
+  do
+    echo -n "."
+    sleep 5
+    status=$(brightbox -s lbs list ${load_balancer} 2>/dev/null | cut -f2)
+  done
+  echo
 
-echo "Remapping cloud ip to group"
-brightbox cloudip map "${cloudip_id}" "${load_balancer}"
+  echo "Remapping cloud ip to group"
+  brightbox cloudip map "${cloudip_id}" "${load_balancer}"
+fi
+
 brightbox cloudip update -n "${cluster_name}" "${cloudip_id}"
 
 wait_for_ssh ${cluster_domain}
