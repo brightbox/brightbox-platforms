@@ -2,7 +2,6 @@
 
 set -e
 
-source $(dirname $0)/build-common
 
 # Default settings
 SSH="ssh -q -oStrictHostKeyChecking=no"
@@ -79,6 +78,8 @@ shift $((OPTIND-1))
 
 
 [[ $# -gt 1 ]] && usage
+
+source $(dirname $0)/build-common
 
 image_id="$1"
 
@@ -196,7 +197,7 @@ echo
 
 echo "Remapping cloud ip to group"
 brightbox cloudip map "${cloudip_id}" "${load_balancer}"
-brightbox cloudup update -n "${cluster_name}" "${cloudip_id}"
+brightbox cloudip update -n "${cluster_name}" "${cloudip_id}"
 
 wait_for_ssh ${cluster_domain}
 

@@ -67,6 +67,7 @@ build_servers() {
 }
 
 
+# Wait for the specified server to change to the correct state in the cli
 wait_for() {
   local server=$1
   local state=$2
@@ -84,4 +85,38 @@ wait_for() {
 
 }
 
+compare_versions() {
+  typeset    IFS='.'
+  typeset -a v1=( $1 )
+  typeset -a v2=( $2 )
+  typeset    n diff
+
+  for (( n=0; n<4; n+=1 )); do
+    diff=$((v1[n]-v2[n]))
+    if [ $diff -ne 0 ] ; then
+      [ $diff -lt 0 ] && echo '-1' || echo '1'
+      return
+    fi
+  done
+  echo  '0'
+}
+
+# Check that the cli exists and is the correct version
+cli_check() {
+  local required_version="2.1.1"
+
+  if ! which brightbox >/dev/null 2>&1; then
+    echo "Can't find the brightbox cli on the path." >&2
+    echo "Install with 'sudo gem install brightbox-cli'"
+  fi
+  current_version=$(brightbox --version | cut -f3 -d' ')
+  if [[ $(compare_versions "${required_version}" "${current_version}") -eq 1 ]]; then
+    echo "Brightbox cli is at version ${current_version}" >&2
+    echo "It needs to be ${required_version} or greater" >&2
+    echo "Update with 'sudo gem install brightbox-cli'" >&2
+    exit 2
+  fi
+}
+
+cli_check
 

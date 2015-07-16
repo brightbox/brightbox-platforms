@@ -2,7 +2,6 @@
 
 # Build a Flynn Image on Brightbox Cloud
 
-source $(dirname $0)/build-common
 
 # The smallest server type Flynn will build in - to reduce the size of
 # the image
@@ -45,6 +44,8 @@ then
   echo "Usage: $(basename $0)" >&2
   exit 1
 fi
+
+source $(dirname $0)/build-common
 
 base_image="$(trusty_image)"
 
