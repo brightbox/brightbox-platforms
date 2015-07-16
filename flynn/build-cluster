@@ -8,6 +8,7 @@ SSH="ssh -q -oStrictHostKeyChecking=no"
 OPTIND=1
 cluster_number=1
 cluster_size=3
+min_hosts=3
 server_type=4gb.ssd
 cluster_name="Flynn Cluster #${cluster_number}"
 
@@ -66,6 +67,10 @@ while getopts "hi:n:t:g:" opt; do
       ;;
     i)
       cluster_size=$OPTARG
+      if [[ "${cluster_size}" -lt 3 ]]; then
+        cluster_size=1
+	min_hosts="${cluster_size}"
+      fi
       ;;
     n)
       cluster_number=$OPTARG
@@ -204,5 +209,5 @@ wait_for_ssh ${cluster_domain}
 
 echo "Bootstrapping Flynn Layer 1"
 ${SSH} ubuntu@"${cluster_domain}" sudo CLUSTER_DOMAIN=${cluster_domain} \
-  flynn-host bootstrap --min-hosts 3 \
+  flynn-host bootstrap --min-hosts "${min_hosts}" \
   --discovery "${discovery_token}"
