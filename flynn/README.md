@@ -63,7 +63,7 @@ your applications and services onto the cluster.
 
 ## Cleaning up the Flynn Cluster
 
-The 'cleanup-cluster' script can remove the entire Flynn cluster and associated loadbalancers, groups, cloudips and images all in one go.
+The `cleanup-cluster` script can remove the entire Flynn cluster and associated loadbalancers, groups, cloudips and images all in one go.
 
 ```
 cleanup-cluster [-igc] cluster_domain/cip_id
