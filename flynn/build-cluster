@@ -184,7 +184,7 @@ for ((i=1; i<${#server_list[*]}; i++)); do
   if ! ${SSH} ubuntu@"${cluster_domain}" ${SSH} ${server_list[i]} sudo flynn-host init --discovery "${discovery_token}"; then
     echo
     echo "ssh to ${server_list[i]} failed with error $?" >&2
-    exit 2
+    exit $?
   fi
 done
 
@@ -194,7 +194,7 @@ for ((i=0; i<${#server_list[*]}; i++)); do
   if ! ${SSH} ubuntu@"${cluster_domain}" ${SSH} ${server_list[i]} sudo start flynn-host; then
     echo
     echo "ssh to ${server_list[i]} failed with error $?" >&2
-    exit 2
+    exit $?
   fi
 done
 echo
@@ -222,6 +222,9 @@ brightbox cloudip update -n "${cluster_name}" "${cloudip_id}"
 wait_for_ssh ${cluster_domain}
 
 echo "Bootstrapping Flynn Layer 1"
-${SSH} ubuntu@"${cluster_domain}" sudo CLUSTER_DOMAIN=${cluster_domain} \
+if ! ${SSH} ubuntu@"${cluster_domain}" sudo CLUSTER_DOMAIN=${cluster_domain} \
   flynn-host bootstrap --min-hosts "${min_hosts}" \
   --discovery "${discovery_token}"
+  echo "Flynn Layer 1 Bootstrap failed with error $?" >&2
+  exit $?
+fi
