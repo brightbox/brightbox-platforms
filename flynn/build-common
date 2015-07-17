@@ -103,7 +103,7 @@ compare_versions() {
 
 # Check that the cli exists and is the correct version
 cli_check() {
-  local required_version="2.1.1"
+  local required_version="2.1.2"
 
   if ! which brightbox >/dev/null 2>&1; then
     echo "Can't find the brightbox cli on the path." >&2

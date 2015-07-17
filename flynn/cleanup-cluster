@@ -92,8 +92,7 @@ for ((i=0; i<${#object_list[*]}; i++)); do
   esac
   if brightbox -s ${sub_command} show ${object_list[i]} 2> /dev/null |
     grep -q 'name.*Flynn'; then
-    while brightbox "${sub_command}" destroy "${object_list[i]}" 2>&1 |
-      grep -q '^ERROR:'; do
+    while ! brightbox "${sub_command}" destroy "${object_list[i]}"; do
       echo "${sub_command} destroy command failed - waiting 20 secs"
       sleep 20
       echo "Retry"
