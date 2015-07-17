@@ -3,12 +3,13 @@
 set -e
 
 # Default settings
-SSH="ssh -q -A -oStrictHostKeyChecking=no -oServerAliveInterval=30 -oServerAliveCountMax=10 -oTCPKeepAlive=yes"
+ssh_options="-A -oStrictHostKeyChecking=no -oServerAliveInterval=30 -oServerAliveCountMax=10 -oTCPKeepAlive=yes"
 OPTIND=1
 cluster_number=1
 cluster_size=3
 min_hosts=3
 server_type=4gb.ssd
+ssh_verbose=-q
 
 usage() {
   echo "Usage: $(basename $0) [-g server group] [-t server_type] [-i cluster_size] [-n cluster_number] [image_id]" >&2
@@ -40,25 +41,43 @@ cluster_domain() {
   brightbox -s cloudip show "${cloud_ip}" 2>/dev/null| sed -n '/^fqdn\t/s///p'
 }
 
+clear_keys() {
+  local target_domain=$1
+
+  ssh-keygen -R ${target_domain}
+  ssh-keygen -R $(getent hosts ${target_domain} | awk '{print $1; exit}')
+}
+
 # Wait until ssh is available *and* cloud-init has finished bootstrapping
 wait_for_ssh() {
   local ssh_target=$1
+  local remote_ssh_target=$2
   local test_file=/var/lib/cloud/instance/boot-finished
 
-  ssh-keygen -R ${cluster_domain}
-  ssh-keygen -R $(getent hosts ${cluster_domain} | awk '{print $1; exit}')
+
+  if [[ "${remote_ssh_target}" ]]; then
+    ssh_command="${SSH} ubuntu@${ssh_target} ${SSH} ${remote_ssh_target}"
+  else
+    ssh_command="${SSH} ubuntu@${ssh_target}"
+  fi
+  clear_keys ${ssh_target} >/dev/null 2>&1
   echo -n "Waiting for ssh at ${ssh_target}"
-  while ! ${SSH} ubuntu@"${ssh_target}" test -e "${test_file}"; do
+  while ! ${ssh_command} test -e "${test_file}"; do
     echo -n "."
     sleep 5
+    clear_keys ${ssh_target} >/dev/null 2>&1
   done
   echo
+  clear_keys ${ssh_target} >/dev/null 2>&1
 }
 
 while getopts "hi:n:t:g:" opt; do
   case "$opt" in
     h)
       usage
+      ;;
+    v)
+      ssh_verbose=-v
       ;;
     g)
       grp_id=$OPTARG
@@ -92,6 +111,7 @@ source $(dirname $0)/build-common
 
 image_id="$1"
 cluster_name="Flynn Cluster #${cluster_number}"
+SSH="ssh ${ssh_options} ${ssh_verbose}"
 
 # Locate the Trusty base image if no pre-built Flynn image is supplied
 if [[ "${image_id}" ]]; then 
@@ -181,9 +201,9 @@ echo "Allocating discovery token ${discovery_token} to other cluster members..."
 
 for ((i=1; i<${#server_list[*]}; i++)); do
   echo -n "${server_list[i]} "
+  wait_for_ssh ${cluster_domain} ${server_list[i]}
   if ! ${SSH} ubuntu@"${cluster_domain}" ${SSH} ${server_list[i]} sudo flynn-host init --discovery "${discovery_token}"; then
-    echo
-    echo "ssh to ${server_list[i]} failed with error $?" >&2
+    echo "\nssh to ${server_list[i]} failed with error $?" >&2
     exit $?
   fi
 done
@@ -192,8 +212,7 @@ echo "Starting Flynn daemon"
 for ((i=0; i<${#server_list[*]}; i++)); do
   echo -n "${server_list[i]} "
   if ! ${SSH} ubuntu@"${cluster_domain}" ${SSH} ${server_list[i]} sudo start flynn-host; then
-    echo
-    echo "ssh to ${server_list[i]} failed with error $?" >&2
+    echo "\nssh to ${server_list[i]} failed with error $?" >&2
     exit $?
   fi
 done
