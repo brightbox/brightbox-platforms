@@ -224,7 +224,7 @@ wait_for_ssh ${cluster_domain}
 echo "Bootstrapping Flynn Layer 1"
 if ! ${SSH} ubuntu@"${cluster_domain}" sudo CLUSTER_DOMAIN=${cluster_domain} \
   flynn-host bootstrap --min-hosts "${min_hosts}" \
-  --discovery "${discovery_token}"
+  --discovery "${discovery_token}"; then
   echo "Flynn Layer 1 Bootstrap failed with error $?" >&2
   exit $?
 fi
