@@ -3,7 +3,7 @@
 set -e
 
 # Default settings
-SSH="ssh -q -A -oStrictHostKeyChecking=no -oServerAliveInterval=30 -oServerAliveCountMax=10 -o TCPKeepAlive=yes"
+SSH="ssh -q -A -oStrictHostKeyChecking=no -oServerAliveInterval=30 -oServerAliveCountMax=10 -oTCPKeepAlive=yes"
 OPTIND=1
 cluster_number=1
 cluster_size=3
