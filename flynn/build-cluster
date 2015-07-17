@@ -4,7 +4,7 @@ set -e
 
 
 # Default settings
-SSH="ssh -q -oStrictHostKeyChecking=no"
+SSH="ssh -q -A -oStrictHostKeyChecking=no"
 OPTIND=1
 cluster_number=1
 cluster_size=3
