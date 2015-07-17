@@ -2,7 +2,6 @@
 
 set -e
 
-
 # Default settings
 SSH="ssh -q -A -oStrictHostKeyChecking=no"
 OPTIND=1
@@ -182,13 +181,21 @@ echo "Allocating discovery token ${discovery_token} to other cluster members..."
 
 for ((i=1; i<${#server_list[*]}; i++)); do
   echo -n "${server_list[i]} "
-  ${SSH} ubuntu@"${cluster_domain}" ${SSH} ${server_list[i]} sudo flynn-host init --discovery "${discovery_token}"
+  if ! ${SSH} ubuntu@"${cluster_domain}" ${SSH} ${server_list[i]} sudo flynn-host init --discovery "${discovery_token}"; then
+    echo
+    echo "ssh to ${server_list[i]} failed with error $?" >&2
+    exit 2
+  fi
 done
 
 echo "Starting Flynn daemon"
 for ((i=0; i<${#server_list[*]}; i++)); do
   echo -n "${server_list[i]} "
-  ${SSH} ubuntu@"${cluster_domain}" ${SSH} ${server_list[i]} sudo start flynn-host
+  if ! ${SSH} ubuntu@"${cluster_domain}" ${SSH} ${server_list[i]} sudo start flynn-host; then
+    echo
+    echo "ssh to ${server_list[i]} failed with error $?" >&2
+    exit 2
+  fi
 done
 echo
 
