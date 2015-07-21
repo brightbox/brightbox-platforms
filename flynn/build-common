@@ -2,6 +2,8 @@
 
 # Function library for Flynn build scripts
 
+source $(dirname $0)/../lib/common
+
 # The Userdata script used to create a Flynn server
 userscript() {
 cat <<"SCRIPT"
@@ -22,101 +24,4 @@ source /tmp/install-flynn
 shutdown -P +1&
 SCRIPT
 }
-
-# Get the latest official Ubuntu Trusy X86_64 image id
-trusty_image() {
-  brightbox -s images list -t official 2>/dev/null | awk '/ubuntu-trusty-14\.04-amd64-server[^-]/ {print $1}'
-}
-
-# Create the build image server
-# Globals:
-#   server_type: Brightbox server type to build
-# Arguments:
-#   image id of Official Ubuntu Trusty image
-build_server() {
-  local image=$1
-
-  brightbox -s server create \
-    --type="${server_type}" \
-    --user-data="$(userscript)" \
-    "${image}" 2>/dev/null| cut -f1
-}
-
-# Create servers in a group
-# Globals:
-#  server_type: Brightbox server type to build
-#  cluster_name: Name of the Flynn Cluster
-# Arguments:
-#  image id: Image to build server from
-#  user script: Cloud init instructions to pass to server
-#  group list: list of server group to include the server in
-#  num of servers: number of servers to create
-build_servers() {
-  local image=$1
-  local user_script=$2
-  local group_list=$3
-  local num_of_servers=${4:-1}
-
-  brightbox server create \
-    --name="${cluster_name}" \
-    --server-groups="${group_list}" \
-    --server-count="${num_of_servers}" \
-    --type="${server_type}" \
-    --user-data="${user_script}" \
-    "${image}" 
-}
-
-
-# Wait for the specified server to change to the correct state in the cli
-wait_for() {
-  local server=$1
-  local state=$2
-  local status
-
-  echo -n "Waiting for server ${server} to complete build"
-
-  status=$(brightbox -s servers list ${server} 2>/dev/null | cut -f2)
-  while [[ "${status}" != "${state}" ]]; do
-    echo -n "."
-    sleep 5
-    status=$(brightbox -s servers list ${server} 2>/dev/null | cut -f2)
-  done
-  echo
-
-}
-
-compare_versions() {
-  typeset    IFS='.'
-  typeset -a v1=( $1 )
-  typeset -a v2=( $2 )
-  typeset    n diff
-
-  for (( n=0; n<4; n+=1 )); do
-    diff=$((v1[n]-v2[n]))
-    if [ $diff -ne 0 ] ; then
-      [ $diff -lt 0 ] && echo '-1' || echo '1'
-      return
-    fi
-  done
-  echo  '0'
-}
-
-# Check that the cli exists and is the correct version
-cli_check() {
-  local required_version="2.1.2"
-
-  if ! which brightbox >/dev/null 2>&1; then
-    echo "Can't find the brightbox cli on the path." >&2
-    echo "Install with 'sudo gem install brightbox-cli'"
-  fi
-  current_version=$(brightbox --version | cut -f3 -d' ')
-  if [[ $(compare_versions "${required_version}" "${current_version}") -eq 1 ]]; then
-    echo "Brightbox cli is at version ${current_version}" >&2
-    echo "It needs to be ${required_version} or greater" >&2
-    echo "Update with 'sudo gem install brightbox-cli'" >&2
-    exit 2
-  fi
-}
-
-cli_check
 

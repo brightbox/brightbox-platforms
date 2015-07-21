@@ -1,0 +1,176 @@
+#!/bin/bash
+
+# Function library for all platforms
+
+
+# Get the latest official Ubuntu Trusty X86_64 image id
+trusty_image() {
+  find_official_image 'ubuntu-trusty-14\.04-amd64-server[^-]'
+}
+
+# Get the latest official CoreOS image id
+coreos_image() {
+  find_official_image 'CoreOS '
+}
+
+# Get the latest image from a pattern
+# Arguments:
+#   Official pattern to look for
+# Returns:
+#   Image ID
+find_official_image() {
+  local pattern="$1"
+
+  brightbox -s images list -t official 2>/dev/null | awk "/[[:space:]]${pattern}/ "'{print $1}'
+}
+
+# Create the build image server
+# Globals:
+#   server_type: Brightbox server type to build
+# Arguments:
+#   image id of Official Ubuntu Trusty image
+build_server() {
+  local image=$1
+
+  brightbox -s server create \
+    --type="${server_type}" \
+    --user-data="$(userscript)" \
+    "${image}" 2>/dev/null| cut -f1
+}
+
+# Create servers in a group
+# Globals:
+#  server_type: Brightbox server type to build
+#  cluster_name: Name of the Cluster
+# Arguments:
+#  image id: Image to build server from
+#  user script: Cloud init instructions to pass to server
+#  group list: list of server group to include the server in
+#  num of servers: number of servers to create
+build_servers() {
+  local image=$1
+  local user_script=$2
+  local group_list=$3
+  local num_of_servers=${4:-1}
+
+  brightbox server create \
+    --name="${cluster_name}" \
+    --server-groups="${group_list}" \
+    --server-count="${num_of_servers}" \
+    --type="${server_type}" \
+    --user-data="${user_script}" \
+    "${image}" 
+}
+
+
+# Wait for the specified server to change to the correct state in the cli
+wait_for() {
+  local server=$1
+  local state=$2
+  local status
+
+  echo -n "Waiting for server ${server} to complete build"
+
+  status=$(brightbox -s servers list ${server} 2>/dev/null | cut -f2)
+  while [[ "${status}" != "${state}" ]]; do
+    echo -n "."
+    sleep 5
+    status=$(brightbox -s servers list ${server} 2>/dev/null | cut -f2)
+  done
+  echo
+
+}
+
+# Compare two version numbers 
+# Returns 1, 0 or -1 
+compare_versions() {
+  typeset    IFS='.'
+  typeset -a v1=( $1 )
+  typeset -a v2=( $2 )
+  typeset    n diff
+
+  for (( n=0; n<4; n+=1 )); do
+    diff=$((v1[n]-v2[n]))
+    if [ $diff -ne 0 ] ; then
+      [ $diff -lt 0 ] && echo '-1' || echo '1'
+      return
+    fi
+  done
+  echo  '0'
+} 
+
+# Obtain the list of servers in a group
+group_servers() {
+  local group_id=$1
+
+  brightbox -s group show ${group_id} 2>/dev/null | sed -n '/^servers\t/s///p'
+}
+
+# Find a free unmapped cloudip - creating one if necessary
+free_cloud_ip() {
+  local cloud_ip=""
+  cloud_ip=$(brightbox -s cloudip 2>/dev/null | grep -m 1 unmapped | cut -f1)
+  if [[ "${cloud_ip}" ]]; then
+    echo "${cloud_ip}"
+  else
+    brightbox -s cloudip create 2>/dev/null | cut -f1
+  fi
+}
+
+# Get the FQDN of the cloud IP.
+cluster_domain() {
+  local cloud_ip=$1
+
+  brightbox -s cloudip show "${cloud_ip}" 2>/dev/null| sed -n '/^fqdn\t/s///p'
+}
+
+#Remove host keys from the local ssh cache
+clear_keys() {
+  local target_domain=${1#*@}
+
+  ssh-keygen -R ${target_domain}
+  ssh-keygen -R $(getent hosts ${target_domain} | awk '{print $1; exit}')
+}
+
+# Wait until ssh is available *and* cloud-init has finished bootstrapping
+wait_for_ssh() {
+  local ssh_target=$1
+  local test_file=$2
+  local remote_ssh_target=$3
+
+
+  if [[ "${remote_ssh_target}" ]]; then
+    ssh_command="${SSH} ${ssh_target} ${SSH} ${remote_ssh_target}"
+  else
+    ssh_command="${SSH} ${ssh_target}"
+  fi
+  clear_keys ${ssh_target} >/dev/null 2>&1
+  echo -n "Waiting for ssh logon for ${ssh_target}"
+  while ! ${ssh_command} test -e "${test_file}"; do
+    echo -n "."
+    sleep 5
+    clear_keys ${ssh_target} >/dev/null 2>&1
+  done
+  echo
+  clear_keys ${ssh_target} >/dev/null 2>&1
+}
+
+# Check that the cli exists and is the correct version
+cli_check() {
+  local required_version="2.1.2"
+
+  if ! which brightbox >/dev/null 2>&1; then
+    echo "Can't find the brightbox cli on the path." >&2
+    echo "Install with 'sudo gem install brightbox-cli'"
+  fi
+  current_version=$(brightbox --version | cut -f3 -d' ')
+  if [[ $(compare_versions "${required_version}" "${current_version}") -eq 1 ]]; then
+    echo "Brightbox cli is at version ${current_version}" >&2
+    echo "It needs to be ${required_version} or greater" >&2
+    echo "Update with 'sudo gem install brightbox-cli'" >&2
+    exit 2
+  fi
+}
+
+cli_check
+
