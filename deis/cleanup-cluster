@@ -1,0 +1,7 @@
+#!/bin/bash
+
+# Clean up Deis Cluster
+
+target=Deis
+
+source ../lib/cleanup-common

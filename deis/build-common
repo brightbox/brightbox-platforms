@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# Function library for Deis build scripts
+
+source $(dirname $0)/../lib/common
+
+
+# The Userdata script used to create a Deis server
+userscript() {
+local coreos_userdata_source=https://raw.githubusercontent.com/deis/deis/master/contrib/coreos/user-data.example
+local discovery_url=$(curl -s -w '\n' https://discovery.etcd.io/new)
+
+curl -sSL "${coreos_userdata_source}" | sed -e "s,# discovery:,discovery:," -e "s,discovery: https://discovery.etcd.io/.*,discovery: ${discovery_url},"
+}
+

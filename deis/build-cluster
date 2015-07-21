@@ -1,0 +1,190 @@
+#!/bin/bash
+
+set -e
+
+# Default settings
+ssh_options="-A -oStrictHostKeyChecking=no -oServerAliveInterval=30 -oServerAliveCountMax=10 -oTCPKeepAlive=yes"
+OPTIND=1
+cluster_number=1
+cluster_size=3
+min_hosts=3
+server_type=4gb.ssd
+ssh_verbose=-q
+logon_id=core
+DEISCTL=/opt/bin/deisctl
+
+usage() {
+  echo "Usage: $(basename $0) [-g server group] [-t server_type] [-i cluster_size] [-n cluster_number]" >&2
+  exit 2
+}
+
+while getopts "hi:n:t:g:" opt; do
+  case "$opt" in
+    h)
+      usage
+      ;;
+    v)
+      ssh_verbose=-v
+      ;;
+    g)
+      grp_id=$OPTARG
+      ;;
+    i)
+      cluster_size=$OPTARG
+      if [[ "${cluster_size}" -lt 3 ]]; then
+	echo "Deis Cluster size must be a minimum of three" >&2
+	exit 2
+      fi
+      ;;
+    n)
+      cluster_number=$OPTARG
+      ;;
+    t)
+      server_type=$OPTARG
+      ;;
+  esac
+done
+
+shift $((OPTIND-1))
+
+[[ "$1" = "--" ]] && shift
+
+
+[[ $# -gt 0 ]] && usage
+
+source $(dirname $0)/build-common
+
+image_id="$1"
+cluster_name="Deis Cluster #${cluster_number}"
+SSH="ssh ${ssh_options} ${ssh_verbose}"
+
+# Locate the CoreOs base image
+if [[ "${image_id}" ]]; then 
+  echo "Building Deis cluster from image ${image_id}"
+  script=""
+  if [[ -z "$(brightbox images list -t snapshot ${image_id} 2>/dev/null)" ]]; then
+    echo "Can't locate snapshot image ${image_id} - aborting" >&2
+    exit 2
+  fi
+else
+  image_id="$(coreos_image)"
+  script="$(userscript)"
+  if [ -z "${image_id}" ]; then
+    echo "Failed to locate CoreOS base image" >&2 
+    exit 1
+  fi
+  echo "Building Deis cluster from CoreOS base image ${image_id}"
+fi
+
+
+if [ -z "${grp_id}" ]; then
+  # Create a firewall group
+  grp_id=$(brightbox -s group create -n "${cluster_name}" 2>/dev/null | grep -o '^grp-.....')
+  fwp_id=$(brightbox -s firewall-policies create -n "${cluster_name}" ${grp_id} 2>/dev/null | grep -o '^fwp-.....')
+  brightbox firewall-rules create -d any --description="Outbound access for ${cluster_name}" ${fwp_id} > /dev/null
+  brightbox firewall-rules create -p tcp -s any --dport="22,80,443,2222,3000-3500" --description="Inbound TCP access for ${cluster_name}" ${fwp_id} > /dev/null
+  brightbox firewall-rules create -p icmp -s any -i any --description="Inbound ICMP access for ${cluster_name}" ${fwp_id} > /dev/null
+  brightbox firewall-rules create -s ${grp_id} --description="Inbound access within ${cluster_name}" ${fwp_id} > /dev/null
+fi
+
+echo "${cluster_name} security group id is ${grp_id}"
+
+echo "Building ${cluster_name} layer 0"
+build_servers "${image_id}" "${script}" "${grp_id}" "${cluster_size}"
+
+# Get the cluster server list from the cluster group details
+server_list=( $(group_servers ${grp_id}) )
+if [[ -z "${server_list}" ]]; then
+  echo "Failed to obtain list of servers in ${grp_id}" >&2
+  exit 2
+fi
+
+# Get a free cloud ip
+cloudip_id=$(free_cloud_ip)
+if [[ -z "${cloudip_id}" ]]; then
+  echo "Failed to allocate unmapped cloud ip" >&2
+  exit 2
+fi
+
+if [[ "${cluster_size}" -gt 1 ]]; then
+  # Create a load balancer to front end the cluster
+  load_balancer=$(brightbox -s lbs create \
+    --listeners=22:22:tcp:50000,2222:2222:tcp:50000,80:80:tcp:50000,443:443:tcp:50000 \
+    --hc-port=22 \
+    --name="${cluster_name}" \
+    ${server_list[*]}| cut -f1)
+  if [[ -z "${load_balancer}" ]]; then
+    echo "Failed to create load balancer" >&2
+    exit 2
+  fi
+fi
+
+# Wait for servers to finish starting up
+for ((i=0; i<${#server_list[*]}; i++)); do
+  wait_for "${server_list[i]}" active
+done
+
+# Map the cloudip to the first server in the cluster and wait for ssh
+# to activate
+brightbox cloudip map -u "${cloudip_id}" "${server_list}"
+
+cluster_domain=$(cluster_domain ${cloudip_id})
+cluster_logon="${logon_id}@${cluster_domain}"
+
+wait_for_ssh "${cluster_logon}" "${DEISCTL}"
+
+echo "Installing Deis Platform"
+if ! ${SSH} "${cluster_logon}" ${DEISCTL} config platform set domain="${cluster_domain}"; then
+  echo "Failed to install Deis platform with error $?" >&2
+  exit 2
+fi
+if ! ${SSH} "${cluster_logon}" ${DEISCTL} install platform; then
+  echo "Failed to install Deis platform with error $?" >&2
+  exit 2
+fi
+
+if [[ "${cluster_size}" -gt 1 ]]; then
+  echo "Unmapping cloud ip"
+  brightbox cloudip unmap ${cloudip_id}
+
+  echo -n "Waiting for load balancer ${load_balancer} to complete"
+  status=$(brightbox -s lbs list ${load_balancer} 2>/dev/null | cut -f2)
+  while [ "${status}" != 'active' ]
+  do
+    echo -n "."
+    sleep 5
+    status=$(brightbox -s lbs list ${load_balancer} 2>/dev/null | cut -f2)
+  done
+  echo
+
+  echo "Remapping cloud ip to group"
+  brightbox cloudip map "${cloudip_id}" "${load_balancer}"
+fi
+
+brightbox cloudip update -n "${cluster_name}" "${cloudip_id}"
+
+wait_for_ssh ${cluster_logon} "${DEISCTL}"
+
+echo "Bootstrapping Deis Platform"
+if ! ${SSH} "${cluster_logon}" ${DEISCTL} start platform; then
+  echo "Deis Bootstrap failed with error $?" >&2
+  exit $?
+fi
+
+echo "Reconfiguring LB to web mode"
+brightbox -s lbs update \
+    --listeners=22:22:tcp:50000,2222:2222:tcp:50000,80:80:tcp:50000,443:443:tcp:50000 \
+    --hc-port=80 \
+    "${load_balancer}"
+
+echo
+cat << INSTR
+Deis bootstrapping complete.
+
+Install the Deis Client
+(see http://docs.deis.io/en/latest/using_deis/install-client/ for
+instructions) and then register with the cluster by pasting the line
+below into a terminal window:
+
+deis register http://deis.${cluster_domain}/
+INSTR

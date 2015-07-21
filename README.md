@@ -9,3 +9,4 @@ Up](https://manage.brightbox.com/signup) is easy and you get trial credit
 to get you started.
 
 * [Flynn](flynn/README.md)
+* [Deis](deis/README.md)
