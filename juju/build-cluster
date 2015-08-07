@@ -1,0 +1,138 @@
+#!/bin/bash
+
+set -e
+
+# Default settings
+ssh_options="-A -oStrictHostKeyChecking=no -oServerAliveInterval=30 -oServerAliveCountMax=10 -oTCPKeepAlive=yes"
+OPTIND=1
+cluster_number=1
+cluster_size=1
+jumpstation_type=512mb.ssd
+server_type=4gb.ssd
+ssh_verbose=-q
+logon_id=ubuntu
+JUJUCTL=/usr/bin/juju
+
+usage() {
+  echo "Usage: $(basename $0) [-g server group] [-t server_type] [-n cluster_number]" >&2
+  exit 2
+}
+
+while getopts "hn:t:g:" opt; do
+  case "$opt" in
+    h)
+      usage
+      ;;
+    v)
+      ssh_verbose=-v
+      ;;
+    g)
+      grp_id=$OPTARG
+      ;;
+    n)
+      cluster_number=$OPTARG
+      ;;
+    t)
+      server_type=$OPTARG
+      ;;
+  esac
+done
+
+shift $((OPTIND-1))
+
+[[ "$1" = "--" ]] && shift
+
+
+[[ $# -gt 0 ]] && usage
+
+source $(dirname $0)/build-common
+
+image_id="$1"
+cluster_name="Juju Cluster #${cluster_number}"
+SSH="ssh ${ssh_options} ${ssh_verbose}"
+
+# Locate the trusty base image
+if [[ "${image_id}" ]]; then 
+  echo "Building Juju cluster from image ${image_id}"
+  script=""
+  if [[ -z "$(brightbox images list -t snapshot ${image_id} 2>/dev/null)" ]]; then
+    echo "Can't locate snapshot image ${image_id} - aborting" >&2
+    exit 2
+  fi
+else
+  image_id="$(trusty_image)"
+  script="$(userscript)"
+  if [ -z "${image_id}" ]; then
+    echo "Failed to locate trusty base image" >&2 
+    exit 1
+  fi
+  echo "Building Juju cluster from trusty base image ${image_id}"
+fi
+
+
+if [ -z "${grp_id}" ]; then
+  # Create a firewall group
+  grp_id=$(brightbox -s group create -n "${cluster_name}" 2>/dev/null | grep -o '^grp-.....')
+  fwp_id=$(brightbox -s firewall-policies create -n "${cluster_name}" ${grp_id} 2>/dev/null | grep -o '^fwp-.....')
+  brightbox firewall-rules create -d any --description="Outbound access for ${cluster_name}" ${fwp_id} > /dev/null
+  brightbox firewall-rules create -p tcp -s any --dport="22,80,443" --description="Inbound TCP access for ${cluster_name}" ${fwp_id} > /dev/null
+  brightbox firewall-rules create -p icmp -s any -i any --description="Inbound ICMP access for ${cluster_name}" ${fwp_id} > /dev/null
+  brightbox firewall-rules create -s ${grp_id} --description="Inbound access within ${cluster_name}" ${fwp_id} > /dev/null
+fi
+
+echo "${cluster_name} security group id is ${grp_id}"
+
+echo "Building ${cluster_name} Management Jumpstation"
+build_servers "${image_id}" "${script}" "${grp_id}" 1 "${jumpstation_type}"
+
+# Get the cluster server list from the cluster group details
+server_list=( $(group_servers ${grp_id}) )
+if [[ -z "${server_list}" ]]; then
+  echo "Failed to obtain list of servers in ${grp_id}" >&2
+  exit 2
+fi
+
+# Get a free cloud ip
+cloudip_id=$(free_cloud_ip)
+if [[ -z "${cloudip_id}" ]]; then
+  echo "Failed to allocate unmapped cloud ip" >&2
+  exit 2
+fi
+
+# Wait for servers to finish starting up
+for ((i=0; i<${#server_list[*]}; i++)); do
+  wait_for "${server_list[i]}" active
+done
+
+# Map the cloudip to the first server in the cluster and wait for ssh
+# to activate
+brightbox cloudip map -u "${cloudip_id}" "${server_list}"
+
+cluster_domain=$(cluster_domain ${cloudip_id})
+cluster_logon="${logon_id}@${cluster_domain}"
+
+wait_for_ssh "${cluster_logon}" "${ubuntu_boot_complete_file}"
+
+echo "Bootstrapping Juju GUI"
+if ! ${SSH} "${cluster_logon}" "/usr/bin/juju bootstrap &&
+  sleep 5 && /usr/bin/juju deploy juju-gui --to 0 &&
+  /usr/bin/juju expose juju-gui"; then
+  echo "Juju Bootstrap failed with error $?" >&2
+  exit 2
+fi
+
+cat << INSTR
+Juju bootstrapping complete.
+
+Juju GUI will short be available at:
+
+https://${cluster_domain}/
+
+The password is the admin-secret from the Juju environment. This can be
+found by logging onto the cluster via:
+
+${cluster_logon} 
+
+looking in ~/.juju/environments/manual.jenv and searching for
+the password field.
+INSTR

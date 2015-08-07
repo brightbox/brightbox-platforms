@@ -1,0 +1,29 @@
+#!/bin/bash
+
+# Function library for Juju build scripts
+
+source $(dirname $0)/../lib/common
+
+
+# The Userdata script used to create a Juju server
+userscript() {
+cat <<"SCRIPT"
+#!/bin/bash
+
+set -e 
+service cron stop
+
+apt_options="--option=Dpkg::Options::=--force-confold --option=Dpkg::options::=--force-unsafe-io --assume-yes --quiet"
+
+apt-get ${apt_options} update
+DEBIAN_FRONTEND=noninteractive apt-get ${apt_options} install --install-recommends language-pack-en juju-core 
+DEBIAN_FRONTEND=noninteractive apt-get ${apt_options} autoremove
+DEBIAN_FRONTEND=noninteractive apt-get ${apt_options} dist-upgrade
+
+sudo -u ubuntu /usr/bin/juju init
+sed -i -e "s/default: amazon/default: manual/" \
+    -e "s/bootstrap-host:.*$/bootstrap-host: $(hostname -f)/" \
+    ~ubuntu/.juju/environments.yaml
+SCRIPT
+}
+
