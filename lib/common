@@ -26,38 +26,42 @@ find_official_image() {
 
 # Create the build image server
 # Globals:
-#   server_type: Brightbox server type to build
+#   server_type: Global Brightbox server type to build
 # Arguments:
 #   image id of Official Ubuntu Trusty image
+#   build_type: Brightbox server type to build
 build_server() {
   local image=$1
+  local build_type="${2:-${server_type}}"
 
   brightbox -s server create \
-    --type="${server_type}" \
+    --type="${build_type}" \
     --user-data="$(userscript)" \
     "${image}" 2>/dev/null| cut -f1
 }
 
 # Create servers in a group
 # Globals:
-#  server_type: Brightbox server type to build
 #  cluster_name: Name of the Cluster
+#  server_type: Default Brightbox server type to build
 # Arguments:
 #  image id: Image to build server from
 #  user script: Cloud init instructions to pass to server
 #  group list: list of server group to include the server in
 #  num of servers: number of servers to create
+#  build_type: Brightbox server type to build
 build_servers() {
   local image=$1
   local user_script=$2
   local group_list=$3
   local num_of_servers=${4:-1}
+  local build_type=${5:-${server_type}}
 
   brightbox server create \
     --name="${cluster_name}" \
     --server-groups="${group_list}" \
     --server-count="${num_of_servers}" \
-    --type="${server_type}" \
+    --type="${build_type}" \
     --user-data="${user_script}" \
     "${image}" 
 }
