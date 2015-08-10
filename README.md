@@ -10,3 +10,4 @@ to get you started.
 
 * [Flynn](flynn/README.md)
 * [Deis](deis/README.md)
+* [Juju](juju/README.md)
