@@ -16,11 +16,9 @@ In particular make sure you have an [ssh key configured](https://www.brightbox.c
 
 ## Usage
 
-You create a Juju cluster with the `build-cluster` script. This will build a Juju Management Server 
-cluster from scratch, or it can be tailored to select the
-[group](https://www.brightbox.com/docs/guides/cli/server-groups/),
-[image](https://www.brightbox.com/docs/reference/server-images/) and
-[server type](https://www.brightbox.com/docs/reference/server-types/)
+You create a Juju cluster with the `build-cluster` script. This will build a Juju Management Server from scratch, or it can be tailored to select the
+[group](https://www.brightbox.com/docs/guides/cli/server-groups/) the
+cluster will be part of.
 
 ## Build a Juju Cluster
 

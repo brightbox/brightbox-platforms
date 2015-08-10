@@ -70,7 +70,9 @@ else
 fi
 
 
-if [ -z "${grp_id}" ]; then
+if [ "${grp_id}" ]; then
+  check_group_empty ${grp_id}
+else
   # Create a firewall group
   grp_id=$(brightbox -s group create -n "${cluster_name}" 2>/dev/null | grep -o '^grp-.....')
   fwp_id=$(brightbox -s firewall-policies create -n "${cluster_name}" ${grp_id} 2>/dev/null | grep -o '^fwp-.....')
@@ -116,7 +118,7 @@ wait_for_ssh "${cluster_logon}" "${ubuntu_boot_complete_file}"
 echo "Bootstrapping Juju GUI"
 if ! ${SSH} "${cluster_logon}" "/usr/bin/juju bootstrap &&
   while ! juju status 2>/dev/null | grep -q 'agent-state: started'
-    do sleep 1; done &&
+    do sleep 5; done &&
   /usr/bin/juju deploy juju-gui --to 0 &&
   /usr/bin/juju expose juju-gui"; then
   echo "Juju Bootstrap failed with error $?" >&2

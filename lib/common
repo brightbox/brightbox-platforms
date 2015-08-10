@@ -140,6 +140,19 @@ clear_keys() {
   ssh-keygen -R $(getent hosts ${target_domain} | awk '{print $1; exit}')
 }
 
+#Check that a group has no members
+check_group_empty() {
+  local target_group=$1
+
+  if ! brightbox -s group show "${target_group}" 2>/dev/null |
+    grep -q '^servers\s$'; then
+    echo "Server group ${target_group} needs to be empty"
+    exit 2
+  fi
+}
+
+
+
 # Wait until ssh is available *and* cloud-init has finished bootstrapping
 wait_for_ssh() {
   local ssh_target=$1
