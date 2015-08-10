@@ -140,7 +140,9 @@ ${cluster_logon}
 looking in ~/.juju/environments/manual.jenv and searching for
 the password field.
 
-Add service machines from the management server by creating them with the Brightbox CLI or the management GUI and then add them into the cluster by running
+Add service machines from the management server by creating them with the
+Brightbox CLI or the management GUI and then add them into the cluster
+by running:
 
 juju add-machine srv-xxxxx
 INSTR
