@@ -115,7 +115,9 @@ wait_for_ssh "${cluster_logon}" "${ubuntu_boot_complete_file}"
 
 echo "Bootstrapping Juju GUI"
 if ! ${SSH} "${cluster_logon}" "/usr/bin/juju bootstrap &&
-  sleep 5 && /usr/bin/juju deploy juju-gui --to 0 &&
+  while ! juju status 2>/dev/null | grep -q 'agent-state: started'
+    do sleep 1; done &&
+  /usr/bin/juju deploy juju-gui --to 0 &&
   /usr/bin/juju expose juju-gui"; then
   echo "Juju Bootstrap failed with error $?" >&2
   exit 2
