@@ -18,6 +18,16 @@ usage() {
   exit 2
 }
 
+wait_for_active_servers() {
+  if [[ -z "${server_list}" ]]; then
+    echo "Failed to obtain list of servers in ${grp_id}" >&2
+    exit 2
+  fi
+  for ((i=0; i<${#server_list[*]}; i++)); do
+    wait_for "${server_list[i]}" active
+  done
+}
+
 while getopts "hi:n:t:g:m:" opt; do
   case "$opt" in
     h)
@@ -93,12 +103,8 @@ echo "${cluster_name} security group id is ${grp_id}"
 echo "Building ${cluster_name} Management Jumpstation"
 build_servers "${image_id}" "${script}" "${grp_id}" 1 "${jumpstation_type}"
 
-# Get the cluster server list from the cluster group details
 server_list=( $(group_servers ${grp_id}) )
-if [[ -z "${server_list}" ]]; then
-  echo "Failed to obtain list of servers in ${grp_id}" >&2
-  exit 2
-fi
+wait_for_active_servers
 
 # Get a free cloud ip
 cloudip_id=$(free_cloud_ip)
@@ -107,14 +113,10 @@ if [[ -z "${cloudip_id}" ]]; then
   exit 2
 fi
 
-# Wait for servers to finish starting up
-for ((i=0; i<${#server_list[*]}; i++)); do
-  wait_for "${server_list[i]}" active
-done
-
 # Map the cloudip to the first server in the cluster and wait for ssh
 # to activate
-brightbox cloudip map -u "${cloudip_id}" "${server_list}"
+management_station="${server_list}"
+brightbox cloudip map -u "${cloudip_id}" "${management_station}"
 
 cluster_domain=$(cluster_domain ${cloudip_id})
 cluster_logon="${logon_id}@${cluster_domain}"
@@ -131,7 +133,24 @@ if ! ${SSH} "${cluster_logon}" "/usr/bin/juju bootstrap &&
   exit 2
 fi
 
+if [ "${cluster_size}" -gt 0 ]; then
+  echo "Building cluster service machines"
+  build_servers "${image_id}" "" "${grp_id}" "${cluster_size}" "${server_type}"
+  server_list=( $(group_servers ${grp_id}) )
+  wait_for_active_servers
+  echo "Adding machines to cluster..."
+  for ((i=1; i<${#server_list[*]}; i++)); do
+    echo "${server_list[i]} "
+    wait_for_ssh "${cluster_logon}" "${ubuntu_boot_complete_file}" ${server_list[i]}
+    if ! ${SSH} "${cluster_logon}" juju add-machine ssh:${server_list[i]}; then
+      echo "add of ${server_list[i]} to cluster failed with error $?" >&2
+      exit 2
+    fi
+  done
+fi
+
 cat << INSTR
+
 Juju bootstrapping complete.
 
 Juju GUI will short be available at:
@@ -146,7 +165,7 @@ ${cluster_logon}
 looking in ~/.juju/environments/manual.jenv and searching for
 the password field.
 
-Add service machines from the management server by creating them with the
+Add additional service machines from the management server by creating them with the
 Brightbox CLI or the management GUI and then add them into the cluster
 by running:
 
