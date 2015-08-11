@@ -16,20 +16,27 @@ In particular make sure you have an [ssh key configured](https://www.brightbox.c
 
 ## Usage
 
-You create a Juju cluster with the `build-cluster` script. This will build a Juju Management Server from scratch, or it can be tailored to select the
+You create a Juju cluster with the `build-cluster` script. This will build
+a Juju Management Server from scratch, or it can be tailored to select the
 [group](https://www.brightbox.com/docs/guides/cli/server-groups/) the
-cluster will be part of.
+cluster will be part of, and the [server types](https://www.brightbox.com/docs/reference/server-types/) used for
+both the management station and the cluster service machines.
 
 ## Build a Juju Cluster
 
 `build-cluster` has several options:
 
 ```
-build-cluster [-g server group] [-n cluster_number] 
+build-cluster [-g server group] [-t server_type] [-m server_type]
+  [-i cluster_size] [-n cluster_number]
 ```
 * `server group` - The group id (in format grp-xxxxx) of the Juju Cluster
 group you want to use instead of creating a new one. Useful if you've
 already run the command before. Find it out by running `brightbox groups`
+* `server type` - The type of server to add to the Juju cluster. Select
+from the list obtained by running `brightbox types`. The default is a
+`4gb.ssd` machine for a cluster machine [-t option] and `512mb.ssd` for the management station [-m option]
+* `cluster size` - The number of cluster service machines to add to the cluster. Defaults to 0 so that only the management station is built. 
 * `cluster number` - The identifier for this Juju Cluster. All brightbox
 objects associated with the cluster are named with this identifier. The default is '1'. 
 
@@ -42,7 +49,7 @@ Once the cluster is working you can refer to the [Using
 the Juju GUI](https://jujucharms.com/docs/stable/howto-gui-management#using-the-gui) section of the Juju website to install
 your applications and services onto the cluster.
 
-You add additional service machines to the cluster by
+You add additional cluster service machines to the cluster by
 first creating servers with the Brightbox CLI, or [management
 GUI](http://manage.brightbox.com), then add machines using the Juju CLI
 from the management server.

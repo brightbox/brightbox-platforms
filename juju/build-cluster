@@ -6,7 +6,7 @@ set -e
 ssh_options="-A -oStrictHostKeyChecking=no -oServerAliveInterval=30 -oServerAliveCountMax=10 -oTCPKeepAlive=yes"
 OPTIND=1
 cluster_number=1
-cluster_size=1
+cluster_size=0
 jumpstation_type=512mb.ssd
 server_type=4gb.ssd
 ssh_verbose=-q
@@ -14,11 +14,11 @@ logon_id=ubuntu
 JUJUCTL=/usr/bin/juju
 
 usage() {
-  echo "Usage: $(basename $0) [-g server group] [-t server_type] [-n cluster_number]" >&2
+  echo "Usage: $(basename $0) [-g server group] [-t server_type] [-m server_type] [-n cluster_number]" >&2
   exit 2
 }
 
-while getopts "hn:t:g:" opt; do
+while getopts "hi:n:t:g:m:" opt; do
   case "$opt" in
     h)
       usage
@@ -34,6 +34,12 @@ while getopts "hn:t:g:" opt; do
       ;;
     t)
       server_type=$OPTARG
+      ;;
+    m)
+      jumpstation_type=$OPTARG
+      ;;
+    i)
+      cluster_size=$OPTARG
       ;;
   esac
 done
