@@ -1,0 +1,7 @@
+#!/bin/bash
+
+# Clean up Juju Cluster
+
+target=Juju
+
+source ../lib/cleanup-common
