@@ -149,21 +149,22 @@ if [ "${cluster_size}" -gt 0 ]; then
   done
 fi
 
-cat << INSTR
+echo <<INSTR
 
 Juju bootstrapping complete.
 
-Juju GUI will short be available at:
+Juju GUI will shortly be available at:
 
 https://${cluster_domain}/
 
-The password is the admin-secret from the Juju environment. This can be
-found by logging onto the management server via:
+The username is "admin" and the password, taken from ~/.juju/environments/manual.jenv 
+on ${cluster_login} is:
 
-${cluster_logon} 
+INSTR
 
-looking in ~/.juju/environments/manual.jenv and searching for
-the password field.
+${SSH} "${cluster_logon}" grep password .juju/environments/manual.jenv
+
+cat << INSTR
 
 Add additional service machines from the management server by creating them with the
 Brightbox CLI or the management GUI and then add them into the cluster
