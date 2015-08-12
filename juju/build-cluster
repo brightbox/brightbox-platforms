@@ -6,7 +6,7 @@ set -e
 ssh_options="-A -oStrictHostKeyChecking=no -oServerAliveInterval=30 -oServerAliveCountMax=10 -oTCPKeepAlive=yes"
 OPTIND=1
 cluster_number=1
-cluster_size=0
+cluster_size=1
 jumpstation_type=512mb.ssd
 server_type=4gb.ssd
 ssh_verbose=-q
@@ -14,7 +14,7 @@ logon_id=ubuntu
 JUJUCTL=/usr/bin/juju
 
 usage() {
-  echo "Usage: $(basename $0) [-g server group] [-t server_type] [-m server_type] [-n cluster_number]" >&2
+  echo "Usage: $(basename $0) [-g server group] [-t server_type] [-m server_type] [-i cluster_size] [-n cluster_number]" >&2
   exit 2
 }
 

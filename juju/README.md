@@ -36,7 +36,7 @@ already run the command before. Find it out by running `brightbox groups`
 * `server type` - The type of server to add to the Juju cluster. Select
 from the list obtained by running `brightbox types`. The default is a
 `4gb.ssd` machine for a cluster machine [-t option] and `512mb.ssd` for the management station [-m option]
-* `cluster size` - The number of cluster service machines to add to the cluster. Defaults to 0 so that only the management station is built. 
+* `cluster size` - The number of cluster service machines to add to the cluster. Defaults to 1 giving you a management station and a service machine.
 * `cluster number` - The identifier for this Juju Cluster. All brightbox
 objects associated with the cluster are named with this identifier. The default is '1'. 
 
