@@ -117,9 +117,12 @@ fi
 # to activate
 management_station="${server_list}"
 brightbox cloudip map -u "${cloudip_id}" "${management_station}"
+brightbox cloudip update -n "${cluster_name}" "${cloudip_id}"
+
 
 cluster_domain=$(cluster_domain ${cloudip_id})
 cluster_logon="${logon_id}@${cluster_domain}"
+
 
 wait_for_ssh "${cluster_logon}" "${ubuntu_boot_complete_file}"
 
@@ -149,7 +152,7 @@ if [ "${cluster_size}" -gt 0 ]; then
   done
 fi
 
-echo <<INSTR
+cat <<INSTR
 
 Juju bootstrapping complete.
 
@@ -157,18 +160,14 @@ Juju GUI will shortly be available at:
 
 https://${cluster_domain}/
 
-The username is "admin" and the password, taken from ~/.juju/environments/manual.jenv 
-on ${cluster_login} is:
+The username is "admin" and the password, taken from
+~/.juju/environments/manual.jenv on ${cluster_logon} is:
 
-INSTR
+$(${SSH} "${cluster_logon}" grep password .juju/environments/manual.jenv)
 
-${SSH} "${cluster_logon}" grep password .juju/environments/manual.jenv
-
-cat << INSTR
-
-Add additional service machines from the management server by creating them with the
-Brightbox CLI or the management GUI and then add them into the cluster
-by running:
+Add additional service machines from the management server by creating
+them with the Brightbox CLI or the management GUI and then add them into
+the cluster by running:
 
 juju add-machine srv-xxxxx
 INSTR
