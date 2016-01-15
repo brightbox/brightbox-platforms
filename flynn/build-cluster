@@ -86,7 +86,7 @@ else
   grp_id=$(brightbox -s group create -n "${cluster_name}" 2>/dev/null | grep -o '^grp-.....')
   fwp_id=$(brightbox -s firewall-policies create -n "${cluster_name}" ${grp_id} 2>/dev/null | grep -o '^fwp-.....')
   brightbox firewall-rules create -d any --description="Outbound access for ${cluster_name}" ${fwp_id} > /dev/null
-  brightbox firewall-rules create -p tcp -s any --dport="22,80,443,2222,3000-3500" --description="Inbound TCP access for ${cluster_name}" ${fwp_id} > /dev/null
+  brightbox firewall-rules create -p tcp -s any --dport="22,80,443,3000-3500" --description="Inbound TCP access for ${cluster_name}" ${fwp_id} > /dev/null
   brightbox firewall-rules create -p icmp -s any -i any --description="Inbound ICMP access for ${cluster_name}" ${fwp_id} > /dev/null
   brightbox firewall-rules create -s ${grp_id} --description="Inbound access within ${cluster_name}" ${fwp_id} > /dev/null
 fi
@@ -121,7 +121,7 @@ fi
 if [[ "${cluster_size}" -gt 1 ]]; then
   # Create a load balancer to front end the cluster
   load_balancer=$(brightbox -s lbs create \
-    --listeners=22:22:tcp:50000,2222:2222:tcp:50000,80:80:tcp:50000,443:443:tcp:50000 \
+    --listeners=22:22:tcp:50000,80:80:tcp:50000,443:443:tcp:50000 \
     --hc-port=22 \
     --name="${cluster_name}" \
     ${server_list[*]}| cut -f1)
@@ -202,6 +202,6 @@ fi
 
 echo "Reconfiguring LB to web mode"
 brightbox -s lbs update \
-    --listeners=2222:2222:tcp:50000,80:80:tcp:50000,443:443:tcp:50000 \
+    --listeners=80:80:tcp:50000,443:443:tcp:50000 \
     --hc-port=80 \
     "${load_balancer}"
