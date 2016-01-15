@@ -9,12 +9,12 @@ ubuntu_boot_complete_file=/var/lib/cloud/instance/boot-finished
 
 # Get the latest official Ubuntu Trusty X86_64 image id
 trusty_image() {
-  find_official_image 'ubuntu-trusty-14\.04-amd64-server[^-]'
+  find_official_image 'ubuntu-trusty-14\.04-amd64-server'
 }
 
 # Get the latest official CoreOS image id
 coreos_image() {
-  find_official_image 'CoreOS '
+  find_official_image 'CoreOS'
 }
 
 # Get the latest image from a pattern
@@ -25,7 +25,7 @@ coreos_image() {
 find_official_image() {
   local pattern="$1"
 
-  brightbox -s images list -t official 2>/dev/null | awk "/[[:space:]]${pattern}/ "'{print $1}'
+  brightbox -s images list -t official 2>/dev/null | awk "$7 ~ /^${pattern}$/ "'{print $1}'
 }
 
 # Create the build image server
