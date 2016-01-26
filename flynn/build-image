@@ -34,11 +34,6 @@ clean_up_and_die() {
 
 trap clean_up_and_die 1 2 3 15
 
-# Get the latest official Ubuntu Trusy X86_64 image id
-trusty_image() {
-  brightbox -s images list -t official 2>/dev/null | awk '/ubuntu-trusty-14\.04-amd64-server[^-]/ {print $1}'
-}
-
 if [ "$#" -ne 0 ]
 then
   echo "Usage: $(basename $0)" >&2

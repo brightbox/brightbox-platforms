@@ -25,7 +25,7 @@ coreos_image() {
 find_official_image() {
   local pattern="$1"
 
-  brightbox -s images list -t official 2>/dev/null | awk "$7 ~ /^${pattern}$/ "'{print $1}'
+  brightbox -s images list -t official 2>/dev/null | awk '$7 ~ /^'"${pattern}"'$/ {print $1}'
 }
 
 # Create the build image server
