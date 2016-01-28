@@ -140,6 +140,10 @@ if ! ${SSH} "${cluster_logon}" ${DEISCTL} config platform set domain="${cluster_
   echo "Failed to install Deis platform with error $?" >&2
   exit 2
 fi
+if ! ${SSH} "${cluster_logon}" ${DEISCTL} refresh-units; then
+  echo "Failed to install Deis platform with error $?" >&2
+  exit 2
+fi
 if ! ${SSH} "${cluster_logon}" ${DEISCTL} install platform; then
   echo "Failed to install Deis platform with error $?" >&2
   exit 2
