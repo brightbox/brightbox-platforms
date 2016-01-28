@@ -10,6 +10,6 @@ userscript() {
 local coreos_userdata_source=https://raw.githubusercontent.com/deis/deis/master/contrib/coreos/user-data.example
 local discovery_url=$(curl -s -w '\n' https://discovery.etcd.io/new)
 
-curl -sSL "${coreos_userdata_source}" | sed -e "s,#DISCOVERY_URL,${discovery_url},"
+curl -sSL "${coreos_userdata_source}" | sed -e "s,discovery: #DISCOVERY_URL,discovery: ${discovery_url},"
 }
 
