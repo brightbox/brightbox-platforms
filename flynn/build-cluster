@@ -11,6 +11,7 @@ min_hosts=3
 server_type=4gb.ssd
 ssh_verbose=-q
 logon_id="ubuntu"
+flynn_script="https://dl.flynn.io/install-flynn"
 
 usage() {
   echo "Usage: $(basename $0) [-g server group] [-t server_type] [-i cluster_size] [-n cluster_number] [image_id]" >&2
@@ -144,6 +145,28 @@ cluster_domain=$(cluster_domain ${cloudip_id})
 cluster_logon="${logon_id}@${cluster_domain}"
 
 wait_for_ssh "${cluster_logon}" "${ubuntu_boot_complete_file}"
+
+echo "Download latest installation script to each server"
+for ((i=0; i<${#server_list[*]}; i++)); do
+  echo -n "${server_list[i]} "
+  if ! retry 3 ${SSH} "${cluster_logon}" ${SSH} ${server_list[i]} curl -fsSl -o /tmp/install-flynn "${flynn_script}"
+  then
+    echo "\nscript download on ${server_list[i]} failed with error $?" >&2
+    exit 2
+  fi
+done
+echo
+
+echo "Clean and upgrade each server"
+for ((i=0; i<${#server_list[*]}; i++)); do
+  echo -n "${server_list[i]} "
+  if ! retry 3 ${SSH} "${cluster_logon}" ${SSH} ${server_list[i]} sudo bash /tmp/install-flynn --clean --yes
+  then
+    echo "\nclean on ${server_list[i]} failed with error $?" >&2
+    exit 2
+  fi
+done
+echo
 
 echo "Obtaining discovery token for Cluster ${cluster_domain}"
 

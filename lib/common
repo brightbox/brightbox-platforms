@@ -176,6 +176,34 @@ wait_for_ssh() {
   clear_keys ${ssh_target} >/dev/null 2>&1
 }
 
+# Retry a command for a number of times or until it succeeds
+function retry()
+{
+        local n=0
+        local try=$1
+        local cmd="${@: 2}"
+	local exit_value=0
+        [[ $# -le 1 ]] && {
+        echo "Usage $0 <retry_number> <Command>"; }
+
+        until [[ $n -ge $try ]]
+        do
+            if $cmd
+	    then
+		exit_value=$?
+		break
+	    else
+		exit_value=$?
+		echo "Command Fail.."
+		((n++))
+		echo "retry $n ::"
+		sleep 1;
+	    fi
+        done
+	return ${exit_value}
+}
+
+
 # Check that the cli exists and is the correct version
 cli_check() {
   local required_version="2.1.2"
