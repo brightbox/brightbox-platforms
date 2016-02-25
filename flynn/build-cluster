@@ -83,7 +83,6 @@ fi
 if [ "${grp_id}" ]; then
   check_group_empty "${grp_id}"
   fwp_id=$(brightbox -s groups show "${grp_id}" 2>/dev/null | grep -o 'fwp-.....')
-   brightbox -s firewall-rules "${fwp_id}" | grep 'Inbound access within' | grep -o 'fwr-.....' | xargs brightbox firewall-rules destroy
 else
   # Create a firewall group
   grp_id=$(brightbox -s group create -n "${cluster_name}" 2>/dev/null | grep -o '^grp-.....')
@@ -91,7 +90,9 @@ else
   brightbox firewall-rules create -d any --description="Outbound access for ${cluster_name}" ${fwp_id} > /dev/null
   brightbox firewall-rules create -p tcp -s any --dport="22,80,443,3000-3500" --description="Inbound TCP access for ${cluster_name}" ${fwp_id} > /dev/null
   brightbox firewall-rules create -p icmp -s any -i any --description="Inbound ICMP access for ${cluster_name}" ${fwp_id} > /dev/null
+  brightbox firewall-rules create -s ${grp_id} --description="Inbound access within ${cluster_name}" ${fwp_id} > /dev/null
 fi
+
 
 echo "${cluster_name} security group id is ${grp_id}"
 
@@ -138,9 +139,6 @@ for ((i=0; i<${#server_list[*]}; i++)); do
   wait_for "${server_list[i]}" active
 done
 
-# Add group firewall rule to servers
-echo "Adding group access firewall rule"
-brightbox firewall-rules create -s ${grp_id} --description="Inbound access within ${cluster_name}" ${fwp_id} > /dev/null
 
 
 # Map the cloudip to the first server in the cluster and wait for ssh
